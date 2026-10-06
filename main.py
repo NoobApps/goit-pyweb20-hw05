@@ -1,7 +1,7 @@
 import asyncio
 import aiohttp
 import platform
-import sys
+import argparse
 from datetime import date, timedelta
 
 API = "https://api.privatbank.ua/p24api/exchange_rates?date="
@@ -41,8 +41,16 @@ async def fetch_exchange_rate(session, day):
             return {day: rates}
         except aiohttp.ClientConnectorError:
             return {day: "No data available for this date."}
+        
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(main(int(sys.argv[1]) if len(sys.argv) > 1 else 1))
+
+    parser = argparse.ArgumentParser(
+                    prog='PrivatBank Exchange Rate Fetcher',
+                    description='Fetches exchange rates for USD and EUR from PrivatBank API for the last N days (1-10).',
+                    epilog='GoIT Python course project.')
+    parser.add_argument('days', type=int, nargs='?', default=1, help='Number of days to fetch exchange rates for (1-10).')
+    args = parser.parse_args()
+    asyncio.run(main(args.days))

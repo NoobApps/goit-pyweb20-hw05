@@ -19,6 +19,7 @@ def get_list_of_days(num: int):
     return days_list
 
 async def main(days: int = 1):
+    """Main function to fetch exchange rates for the last 'days' days."""
     async with aiohttp.ClientSession() as session:
         try:
             days = get_list_of_days(days)
@@ -29,6 +30,7 @@ async def main(days: int = 1):
             print(f"{e}")
 
 async def fetch_exchange_rate(session, day):
+    """Fetches exchange rates for USD and EUR from PrivatBank API for a specific day."""
     url = API + day
     async with session.get(url) as response:
         data = await response.json()

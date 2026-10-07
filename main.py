@@ -66,15 +66,12 @@ class RateFetcher:
         
         if response is None:
             return {day: "Failed to connect or received an invalid HTTP status."}
-        try:
-            processed_data = await RateParser.parse_data(response, day)
-
-            if processed_data is None:
-                return {day: f"no data available for {day}"}
-            else:
-                return processed_data
-        except json.JSONDecodeError as e:
-            return {day: f"Data processing failed: {e} "}
+        processed_data = await RateParser.parse_data(response, day)
+        if processed_data is None:
+            return {day: f"no data available for {day}"}
+        else:
+            return processed_data
+       
             
 async def main(days: int = 1):
     """Main function to fetch exchange rates for the last 'days' days."""

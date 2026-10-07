@@ -63,7 +63,6 @@ class RateFetcher:
     @staticmethod
     async def fetch(session: aiohttp.ClientSession, day: str):
         response = await APIClient.fetch_raw_data(session, day)
-        
         if response is None:
             return {day: "Failed to connect or received an invalid HTTP status."}
         processed_data = await RateParser.parse_data(response, day)

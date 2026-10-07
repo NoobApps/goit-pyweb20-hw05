@@ -1,49 +1,93 @@
 import asyncio
+import json
 import aiohttp
 import platform
 import argparse
 from datetime import date, timedelta
 
-API = "https://api.privatbank.ua/p24api/exchange_rates?date="
+API_URL = "https://api.privatbank.ua/p24api/exchange_rates?date="
+CURRENCIES = ["EUR", "USD"]
 
 def get_list_of_days(num: int):
     """
     Returns a list of dates in the format "dd.mm.yyyy" for the last 'num' days including today.
     """
     if num > 10 or num < 1:
-        raise ValueError("Number of days must be at interval 1-10.")
+        raise ValueError("Number of days must be 1-10.")
     days_list = []
     for i in range(num):
         day = date.today() - timedelta(days=i)
         days_list.append(day.strftime("%d.%m.%Y"))
     return days_list
 
-async def main(days: int = 1):
-    """Main function to fetch exchange rates for the last 'days' days."""
-    async with aiohttp.ClientSession() as session:
-        try:
-            days = get_list_of_days(days)
-            tasks = [fetch_exchange_rate(session, day) for day in days]
-            results = await asyncio.gather(*tasks)
-            print (results)
-        except Exception as e:
-            print(f"{e}")
+class APIClient:
 
-async def fetch_exchange_rate(session, day):
-    """Fetches exchange rates for USD and EUR from PrivatBank API for a specific day."""
-    url = API + day
-    async with session.get(url) as response:
-        data = await response.json()
+    @staticmethod
+    async def fetch_raw_data(session: aiohttp.ClientSession, day: str):
+        url = API_URL + day
         try:
-            d = data.get("exchangeRate", [])
-            filtered_data = list(filter(lambda x: x.get("currency") in ["EUR", "USD"], d))
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return None
+                else:
+                    try:
+                        return await response.json()
+                    except json.JSONDecodeError:
+                        print(f"[ERROR] APIClient: Could not decode JSON for {day}.")
+                        return None
+        except aiohttp.ClientConnectorError as e:
+            print(f"[ERROR] APIClient: Network connection failed for {day}: {e}")
+            return None
+        except Exception as e:
+            print(f"[ERROR] APIClient: An unexpected error occurred for {day}: {e}")
+            return None
+
+class RateParser:
+
+    @staticmethod
+    async def parse_data(raw_data: dict, day: str):
+        try:
+            filtered_data = [item for item in raw_data.get("exchangeRate", []) if item.get("currency") in CURRENCIES]
             rates={}
             for item in filtered_data:
                 rates[item.get("currency")] = {'sale': item.get("saleRate"), 'purchase': item.get("purchaseRate")}
+            if not rates:
+                return None
             return {day: rates}
-        except aiohttp.ClientConnectorError:
-            return {day: "No data available for this date."}
+        except json.JSONDecodeError as e:
+            return {day: f"Data processing failed: {e}"}
+
         
+class RateFetcher:
+
+    @staticmethod
+    async def fetch(session: aiohttp.ClientSession, day: str):
+        response = await APIClient.fetch_raw_data(session, day)
+        
+        if response is None:
+            return {day: "Failed to connect or received an invalid HTTP status."}
+        try:
+            processed_data = await RateParser.parse_data(response, day)
+
+            if processed_data is None:
+                return {day: f"no data available for {day}"}
+            else:
+                return processed_data
+        except json.JSONDecodeError as e:
+            return {day: f"Data processing failed: {e} "}
+            
+async def main(days: int = 1):
+    """Main function to fetch exchange rates for the last 'days' days."""
+    try:
+        days_list = get_list_of_days(days)
+    except ValueError as ve:
+        print(f"[ERROR] {ve}")
+        return
+    async with aiohttp.ClientSession() as session:
+            tasks = [RateFetcher.fetch(session, day) for day in days_list]
+            results = await asyncio.gather(*tasks)
+            print (results)
+    
 
 if __name__ == "__main__":
     if platform.system() == "Windows":
